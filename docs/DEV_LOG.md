@@ -1,0 +1,205 @@
+---
+
+# 6. `docs/DEV_LOG.md`
+
+```md
+# DEV_LOG.md
+
+# 开发日志
+
+本文件用于记录项目的重要修改、设计决策、Bug、修复方法和阶段进度。
+
+AI Agent 每次完成重要修改后，应在本文件末尾追加一条记录。
+
+---
+
+## 日志格式
+
+每条日志建议使用以下格式：
+
+```md
+## YYYY-MM-DD - 修改标题
+
+### 修改内容
+
+1. ...
+2. ...
+3. ...
+
+### 修改文件
+
+- `src/...`
+- `docs/...`
+
+### 修改原因
+
+说明为什么要做这次修改。
+
+### 验收方法
+
+1. ...
+2. ...
+3. ...
+
+### 注意事项
+
+记录本次修改后需要注意的问题。
+
+---
+
+## 2026-06-05 - 第一阶段 Web 最小原型实现
+
+### 修改内容
+
+1. 创建 Vite + React + TypeScript 项目（`linear-algebra-app`）
+2. 实现数学模块：`Vec2.ts`（二维向量）、`Mat2.ts`（二维矩阵）
+3. 实现渲染模块：`Camera2D.ts`（坐标转换）、`drawGrid.ts`（网格）、`drawAxes.ts`（坐标轴）、`drawVector.ts`（向量箭头）、`drawPolygon.ts`（多边形/单位正方形）
+4. 实现 React 组件：`MatrixInput.tsx`（矩阵输入）、`ControlPanel.tsx`（控制面板）、`CanvasView.tsx`（Canvas 绘图区）
+5. 整合所有组件到 `App.tsx`
+
+### 修改文件
+
+- `linear-algebra-app/src/math/Vec2.ts`
+- `linear-algebra-app/src/math/Mat2.ts`
+- `linear-algebra-app/src/render/Camera2D.ts`
+- `linear-algebra-app/src/render/drawGrid.ts`
+- `linear-algebra-app/src/render/drawAxes.ts`
+- `linear-algebra-app/src/render/drawVector.ts`
+- `linear-algebra-app/src/render/drawPolygon.ts`
+- `linear-algebra-app/src/components/MatrixInput.tsx`
+- `linear-algebra-app/src/components/ControlPanel.tsx`
+- `linear-algebra-app/src/components/CanvasView.tsx`
+- `linear-algebra-app/src/App.tsx`
+- `linear-algebra-app/src/index.css`
+
+### 修改原因
+
+实现第一阶段要求的 Web 最小原型：可以输入 2×2 矩阵并播放二维线性变换动画。
+
+### 验收方法
+
+1. 运行 `npm run dev` 启动开发服务器
+2. 浏览器打开 http://localhost:5173/
+3. 输入测试矩阵并点击"播放变换"
+4. 验证 ROADMAP.md 中的 7 个测试用例
+
+### 注意事项
+
+- 矩阵乘法顺序：先 A 后 B 对应 B * A
+- 动画插值：M(t) = (1 - t)I + tA
+- 坐标转换统一通过 Camera2D 完成
+
+---
+
+## 2026-06-05 - 第一阶段验收检查与修复
+
+### 修改内容
+
+1. 执行 `npm run build` 验证构建
+2. 执行 TypeScript 类型检查
+3. 修复矩阵输入框第二列被 Canvas 坐标轴遮挡的问题
+4. 验证 7 个测试矩阵的数学正确性
+
+### 修改文件
+
+- `linear-algebra-app/src/components/ControlPanel.tsx` - 添加 `position: relative` 和 `z-index: 10`
+
+### 修改原因
+
+用户报告矩阵输入框第二列被坐标轴遮挡，无法正常输入。原因是 Canvas 容器设置了 `position: relative` 但没有 `overflow: hidden`，导致坐标轴线可能绘制到 ControlPanel 区域上方。
+
+### 验收结果
+
+| 检查项 | 结果 |
+|--------|------|
+| `npm run build` | ✅ 通过 |
+| TypeScript 类型检查 | ✅ 通过（无错误） |
+| 输入框遮挡问题 | ✅ 已修复 |
+
+### 矩阵约定验证
+
+| 测试 | 输入矩阵 | e1' | e2' | 符合预期 |
+|------|----------|-----|-----|----------|
+| 单位矩阵 | `[1,0;0,1]` | (1,0) | (0,1) | ✓ |
+| x缩放 | `[2,0;0,1]` | (2,0) | (0,1) | ✓ |
+| y缩放 | `[1,0;0,2]` | (1,0) | (0,2) | ✓ |
+| 旋转90° | `[0,-1;1,0]` | (0,1) | (-1,0) | ✓ |
+| 水平剪切 | `[1,1;0,1]` | (1,0) | (1,1) | ✓ |
+| 压缩到x轴 | `[1,0;0,0]` | (1,0) | (0,0) | ✓ |
+| y轴翻转 | `[-1,0;0,1]` | (-1,0) | (0,1) | ✓ |
+
+### 手动验收方法
+
+1. 浏览器打开 http://localhost:5174/
+2. 逐一测试 ROADMAP.md 中的 7 个矩阵
+3. 验证非法输入不导致崩溃
+4. 验证重置功能恢复正常
+
+### 注意事项
+
+- 开发服务器端口可能因占用而变化（5173 或 5174）
+- 输入框第二列现在可以正常点击输入
+- 所有数学约定符合 MATH_CONVENTIONS.md
+
+---
+
+## 2026-06-05 - 第二阶段：抽象场景对象系统
+
+### 修改内容
+
+1. 创建 `src/scene/` 目录
+2. 实现 `Grid.ts` - 网格场景对象
+3. 实现 `VectorArrow.ts` - 向量箭头场景对象
+4. 实现 `UnitSquare.ts` - 单位正方形场景对象
+5. 实现 `Scene.ts` - 场景管理器
+6. 重构 `CanvasView.tsx` - 移除场景管理，改用 Scene 类
+
+### 修改文件
+
+**新增文件：**
+- `src/scene/Grid.ts`
+- `src/scene/VectorArrow.ts`
+- `src/scene/UnitSquare.ts`
+- `src/scene/Scene.ts`
+
+**修改文件：**
+- `src/components/CanvasView.tsx` - 从 174 行减少到 145 行，drawFrame 从 77 行减少到 8 行
+
+### 修改原因
+
+第一阶段代码中，CanvasView.tsx 包含了大量场景对象管理和绘制逻辑，不利于扩展。第二阶段将这些逻辑抽象到独立的场景对象中，为第三阶段动画系统做准备。
+
+### 结构审计结果
+
+| 检查项 | 结果 |
+|--------|------|
+| CanvasView 是否直接调用 drawGrid/drawAxes/drawVector/drawPolygon？ | ✅ 否 |
+| CanvasView 是否只负责 Canvas 生命周期？ | ✅ 是 |
+| src/scene/ 是否包含 Grid/VectorArrow/UnitSquare/Scene？ | ✅ 是 |
+| 场景对象是否不依赖 React？ | ✅ 是 |
+| Scene.render() 是否统一控制绘制顺序？ | ✅ 是 |
+| 坐标轴是否仍然正常绘制？ | ✅ 是 |
+| 原始 e1/e2 和变换后 e1'/e2' 是否都被保留？ | ✅ 是 |
+| 是否没有创建 src/animation/？ | ✅ 是 |
+| 是否没有实现高级功能？ | ✅ 是 |
+
+### 验收结果
+
+| 检查项 | 结果 |
+|--------|------|
+| `npm run build` | ✅ 通过 |
+| `npx tsc --noEmit` | ✅ 通过 |
+| 7 个测试矩阵视觉效果 | ✅ 与第一阶段一致 |
+| 重置功能 | ✅ 正常 |
+| 非法输入 | ✅ 不崩溃 |
+
+### Git 标签
+
+- `stage-1-stable` - 第一阶段稳定版本
+- `stage-2-stable` - 第二阶段稳定版本
+
+### 注意事项
+
+- 第二阶段是"看不见的改进"——视觉效果不变，但代码结构更清晰
+- Grid 的 transform 参数保留供后续阶段使用（当前网格不经过变换）
+- 为第三阶段动画系统做好了准备

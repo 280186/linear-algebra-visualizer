@@ -7,7 +7,8 @@ import { UserVector } from '../scene/UserVector';
 import { Timeline } from '../animation/Timeline';
 import { ApplyMatrixAnimation } from '../animation/ApplyMatrixAnimation';
 import { smoothStep } from '../animation/easing';
-import { MatrixItem, VectorItem } from '../types';
+import { MatrixItem, VectorItem, BasisConfig } from '../types';
+import { buildBasisMatrix } from '../utils/basis';
 
 /**
  * CanvasView 暴露的控制接口
@@ -16,6 +17,7 @@ export interface CanvasViewHandle {
   playSequence(sequence: MatrixItem[]): void;
   stepForward(cumulativeMatrices: Mat2[], currentIndex: number): void;
   stepBackward(cumulativeMatrices: Mat2[], currentIndex: number): void;
+  playInverse(): void;
   pause(): void;
   resume(): void;
   reset(): void;
@@ -29,6 +31,8 @@ interface CanvasViewProps {
   onStepChange?: (stepIndex: number) => void;
   vectorSet?: VectorItem[];
   transformedGridOpacity?: number;
+  basisGridOpacity?: number;
+  basisConfig?: BasisConfig;
 }
 
 const ANIMATION_DURATION = 1500; // 1.5 秒
@@ -46,7 +50,7 @@ const ANIMATION_DURATION = 1500; // 1.5 秒
  * 7. 滚轮缩放
  */
 export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(
-  ({ onAnimationComplete, onCurrentMatrixChange, onPlayStateChange, onStepChange, vectorSet, transformedGridOpacity }, ref) => {
+  ({ onAnimationComplete, onCurrentMatrixChange, onPlayStateChange, onStepChange, vectorSet, transformedGridOpacity, basisGridOpacity, basisConfig }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationRef = useRef<number | null>(null);
     const sceneRef = useRef<Scene>(new Scene());
@@ -104,15 +108,26 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(
       const camera = cameraRef.current;
       const userVectors = getUserVectors(vectorSet || []);
 
+      // 构造基矩阵
+      const basisMatrix = basisConfig
+        ? buildBasisMatrix(
+            new Vec2(basisConfig.b1[0], basisConfig.b1[1]),
+            new Vec2(basisConfig.b2[0], basisConfig.b2[1])
+          )
+        : null;
+
       // 清空画布
       ctx.fillStyle = '#0f0f23';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // 使用 Scene 渲染所有对象（包括用户向量）
       sceneRef.current.render(ctx, camera, canvas.width, canvas.height, matrix, userVectors, {
-        transformedGridOpacity
+        transformedGridOpacity,
+        basisGridOpacity,
+        basisMatrix,
+        showBasis: basisConfig?.showBasisCoordinateInfo ?? false
       });
-    }, [vectorSet, getUserVectors, transformedGridOpacity]);
+    }, [vectorSet, getUserVectors, transformedGridOpacity, basisGridOpacity, basisConfig]);
 
     /**
      * 动画循环
@@ -366,6 +381,39 @@ export const CanvasView = forwardRef<CanvasViewHandle, CanvasViewProps>(
             currentMatrixRef.current = to;
             onCurrentMatrixChange?.(to);
             onStepChange?.(targetIndex);
+          }
+        }));
+      },
+
+      /**
+       * 播放逆变换
+       * 从当前矩阵播放到单位矩阵
+       * 内部必须检查当前矩阵是否可逆
+       */
+      playInverse(): void {
+        const from = currentMatrixRef.current;
+
+        // 内部检查是否可逆
+        const inverse = from.inverse();
+        if (!inverse) return;
+
+        const to = Mat2.identity();
+
+        timelineRef.current.play(new ApplyMatrixAnimation({
+          from,
+          to,
+          duration: ANIMATION_DURATION,
+          easing: smoothStep,
+          onUpdate: (m: Mat2) => {
+            currentMatrixRef.current = m;
+            onCurrentMatrixChange?.(m);
+          },
+          onFinish: () => {
+            currentMatrixRef.current = to;
+            onCurrentMatrixChange?.(to);
+            onStepChange?.(0);
+            onPlayStateChange?.(false);
+            onAnimationComplete?.();
           }
         }));
       },

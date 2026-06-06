@@ -4,10 +4,13 @@ import { ResizableSidebar } from './components/ResizableSidebar';
 import { MatrixList } from './components/MatrixList';
 import { VectorList } from './components/VectorList';
 import { ResultPanel } from './components/ResultPanel';
+import { BasisPanel } from './components/BasisPanel';
 import { Mat2 } from './math/Mat2';
-import { MatrixItem, VectorItem } from './types';
+import { Vec2 } from './math/Vec2';
+import { MatrixItem, VectorItem, BasisConfig } from './types';
 import { generateId } from './utils/id';
 import { computeCumulativeMatrices } from './utils/matrixSequence';
+import { buildBasisMatrix, standardToBasisCoordinates } from './utils/basis';
 import './styles/global.css';
 
 /**
@@ -27,6 +30,16 @@ function App() {
 
   // 变换网格强度
   const [transformedGridOpacity, setTransformedGridOpacity] = useState(0.6);
+
+  // 新基网格强度
+  const [basisGridOpacity, setBasisGridOpacity] = useState(0.4);
+
+  // 基与坐标配置（默认关闭）
+  const [basisConfig, setBasisConfig] = useState<BasisConfig>({
+    b1: [1, 0],
+    b2: [0, 1],
+    showBasisCoordinateInfo: false
+  });
 
   // 动画状态
   const [isPlaying, setIsPlaying] = useState(false);
@@ -71,12 +84,19 @@ function App() {
     ));
   }, []);
 
-  // 添加向量（新增向量默认不显示数值标签）
+  // 添加向量（新增向量默认不显示数值标签，默认标准坐标主控）
   const handleAddVector = useCallback(() => {
     if (vectorSet.length >= 8) return;
     setVectorSet(prev => [
       ...prev,
-      { id: generateId(), name: `v${prev.length + 1}`, vector: [1, 0], showValueLabel: false }
+      {
+        id: generateId(),
+        name: `v${prev.length + 1}`,
+        vector: [1, 0],
+        showValueLabel: false,
+        controlMode: 'standard',
+        basisCoord: [1, 0]
+      }
     ]);
   }, [vectorSet.length]);
 
@@ -98,6 +118,52 @@ function App() {
       item.id === id ? { ...item, showValueLabel: show } : item
     ));
   }, []);
+
+  // 修改标准坐标（主控模式设为 'standard'，同时更新 basisCoord）
+  const handleStandardChange = useCallback((id: string, vector: [number, number]) => {
+    setVectorSet(prev => prev.map(item => {
+      if (item.id !== id) return item;
+
+      // 计算新的 basisCoord
+      const vec = new Vec2(vector[0], vector[1]);
+      const b1 = new Vec2(basisConfig.b1[0], basisConfig.b1[1]);
+      const b2 = new Vec2(basisConfig.b2[0], basisConfig.b2[1]);
+      const P = buildBasisMatrix(b1, b2);
+      const basisCoordResult = standardToBasisCoordinates(vec, P);
+      const newBasisCoord = basisCoordResult
+        ? [basisCoordResult.x, basisCoordResult.y] as [number, number]
+        : item.basisCoord ?? [0, 0];
+
+      return {
+        ...item,
+        vector,
+        controlMode: 'standard' as const,
+        basisCoord: newBasisCoord
+      };
+    }));
+  }, [basisConfig]);
+
+  // 修改新基坐标（主控模式设为 'basis'，同时更新标准坐标）
+  const handleBasisChange = useCallback((id: string, basisCoord: [number, number]) => {
+    setVectorSet(prev => prev.map(item => {
+      if (item.id !== id) return item;
+
+      // 计算新的标准坐标 v = P [v]_B
+      const b1 = new Vec2(basisConfig.b1[0], basisConfig.b1[1]);
+      const b2 = new Vec2(basisConfig.b2[0], basisConfig.b2[1]);
+      const P = buildBasisMatrix(b1, b2);
+      const coordVec = new Vec2(basisCoord[0], basisCoord[1]);
+      const standardVec = P.multiplyVec(coordVec);
+      const newVector = [standardVec.x, standardVec.y] as [number, number];
+
+      return {
+        ...item,
+        vector: newVector,
+        controlMode: 'basis' as const,
+        basisCoord
+      };
+    }));
+  }, [basisConfig]);
 
   // 统一 reset 逻辑
   const handleReset = useCallback(() => {
@@ -164,6 +230,16 @@ function App() {
 
     canvasViewRef.current.stepBackward(cumulativeMatrices, currentStepIndex);
   }, [cumulativeMatrices, currentStepIndex]);
+
+  // 播放逆变换
+  const handlePlayInverse = useCallback(() => {
+    if (!canvasViewRef.current) return;
+
+    setIsPlaying(true);
+    setIsPaused(false);
+
+    canvasViewRef.current.playInverse();
+  }, []);
 
   // 动画完成
   const handleAnimationComplete = useCallback(() => {
@@ -254,6 +330,16 @@ function App() {
             onRemove={handleRemoveVector}
             onChange={handleVectorChange}
             onChangeShowLabel={handleChangeShowLabel}
+            onStandardChange={handleStandardChange}
+            onBasisChange={handleBasisChange}
+            basisConfig={basisConfig}
+            disabled={isPlaying && !isPaused}
+          />
+
+          {/* 基与坐标 */}
+          <BasisPanel
+            config={basisConfig}
+            onChange={setBasisConfig}
             disabled={isPlaying && !isPaused}
           />
 
@@ -266,7 +352,7 @@ function App() {
             <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#aaa' }}>
               显示设置
             </h3>
-            <div>
+            <div style={{ marginBottom: '8px' }}>
               <label style={{ fontSize: '12px', color: '#888' }}>
                 变换网格强度：{transformedGridOpacity.toFixed(1)}
               </label>
@@ -277,6 +363,20 @@ function App() {
                 step="0.1"
                 value={transformedGridOpacity}
                 onChange={(e) => setTransformedGridOpacity(parseFloat(e.target.value))}
+                style={{ width: '100%', marginTop: '4px' }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: '12px', color: '#888' }}>
+                新基网格强度：{basisGridOpacity.toFixed(1)}
+              </label>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.1"
+                value={basisGridOpacity}
+                onChange={(e) => setBasisGridOpacity(parseFloat(e.target.value))}
                 style={{ width: '100%', marginTop: '4px' }}
               />
             </div>
@@ -337,6 +437,29 @@ function App() {
               {isPlaying && !isPaused ? '播放中...' : '播放完整序列'}
             </button>
 
+            {/* 播放逆变换按钮 */}
+            {(() => {
+              const canPlayInverse = currentMatrix && Math.abs(currentMatrix.determinant()) >= 1e-8 && !isPlaying;
+              return (
+                <button
+                  onClick={handlePlayInverse}
+                  disabled={!canPlayInverse}
+                  style={{
+                    padding: '10px',
+                    backgroundColor: canPlayInverse ? '#E91E63' : '#555',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: canPlayInverse ? 'pointer' : 'not-allowed',
+                    fontSize: '14px'
+                  }}
+                  title={currentMatrix && Math.abs(currentMatrix.determinant()) < 1e-8 ? '当前矩阵不可逆，无法播放逆变换' : ''}
+                >
+                  播放逆变换 (C → I)
+                </button>
+              );
+            })()}
+
             {isPlaying && (
               <button
                 onClick={handleTogglePause}
@@ -375,6 +498,7 @@ function App() {
             matrixSequence={matrixSequence}
             vectorSet={vectorSet}
             currentMatrix={currentMatrix}
+            basisConfig={basisConfig}
           />
         </div>
       </ResizableSidebar>
@@ -387,6 +511,8 @@ function App() {
         onStepChange={handleStepChange}
         vectorSet={vectorSet}
         transformedGridOpacity={transformedGridOpacity}
+        basisGridOpacity={basisGridOpacity}
+        basisConfig={basisConfig}
       />
     </div>
   );

@@ -1,8 +1,9 @@
 import React from 'react';
 import { Mat2 } from '../math/Mat2';
 import { Vec2 } from '../math/Vec2';
-import { MatrixItem, VectorItem } from '../types';
+import { MatrixItem, VectorItem, BasisConfig } from '../types';
 import { computeCumulativeMatrices, computeTransformedVectors } from '../utils/matrixSequence';
+import { buildBasisMatrix, isValidBasis, standardToBasisCoordinates, computeTransformInBasis, formatElement } from '../utils/basis';
 
 const EPS = 1e-8;
 
@@ -10,13 +11,23 @@ interface ResultPanelProps {
   matrixSequence: MatrixItem[];
   vectorSet: VectorItem[];
   currentMatrix?: Mat2 | null;
+  basisConfig?: BasisConfig;
 }
 
 /**
  * 格式化矩阵为字符串
  */
 function formatMatrix(mat: Mat2): string {
-  return `[ ${mat.a.toFixed(2)}  ${mat.b.toFixed(2)} ]\n[ ${mat.c.toFixed(2)}  ${mat.d.toFixed(2)} ]`;
+  return `[ ${formatElement(mat.a)}  ${formatElement(mat.b)} ]\n[ ${formatElement(mat.c)}  ${formatElement(mat.d)} ]`;
+}
+
+/**
+ * 格式化标量值，避免 -0.00、NaN、Infinity
+ */
+function formatScalar(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  if (Math.abs(value) < EPS) return '0';
+  return Math.abs(value).toFixed(2);
 }
 
 /**
@@ -44,7 +55,8 @@ function matricesEqual(a: Mat2, b: Mat2): boolean {
 export const ResultPanel: React.FC<ResultPanelProps> = ({
   matrixSequence,
   vectorSet,
-  currentMatrix
+  currentMatrix,
+  basisConfig
 }) => {
   if (matrixSequence.length === 0 && vectorSet.length === 0) {
     return null;
@@ -144,6 +156,41 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           <pre style={{ margin: 0, fontSize: '11px' }}>
             {formatMatrix(finalMatrix)}
           </pre>
+          {/* 最终矩阵行列式 */}
+          <div style={{ marginTop: '6px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px', fontSize: '11px' }}>
+            <span style={{ color: '#888' }}>det(C) = {formatScalar(finalMatrix.determinant())}</span>
+            <span style={{ color: '#666', marginLeft: '8px' }}>
+              → 面积缩放 {formatScalar(Math.abs(finalMatrix.determinant()))} 倍
+            </span>
+            {finalMatrix.determinant() > EPS && (
+              <span style={{ color: '#4CAF50', marginLeft: '8px' }}>方向保持</span>
+            )}
+            {finalMatrix.determinant() < -EPS && (
+              <span style={{ color: '#ff4444', marginLeft: '8px' }}>方向翻转</span>
+            )}
+            {Math.abs(finalMatrix.determinant()) <= EPS && (
+              <span style={{ color: '#888', marginLeft: '8px' }}>平面被压缩，矩阵不可逆</span>
+            )}
+          </div>
+          {/* 最终矩阵逆矩阵 */}
+          <div style={{ marginTop: '6px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px', fontSize: '11px' }}>
+            {(() => {
+              const finalInverse = finalMatrix.inverse();
+              return finalInverse ? (
+                <div>
+                  <span style={{ color: '#4CAF50' }}>最终累计矩阵可逆</span>
+                  <span style={{ color: '#aaa', marginLeft: '8px' }}>C⁻¹ =</span>
+                  <pre style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#aaa' }}>
+                    {`[ ${formatElement(finalInverse.a)}  ${formatElement(finalInverse.b)} ]`}
+                    {'\n'}
+                    {`[ ${formatElement(finalInverse.c)}  ${formatElement(finalInverse.d)} ]`}
+                  </pre>
+                </div>
+              ) : (
+                <span style={{ color: '#888' }}>最终累计矩阵不可逆</span>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -172,6 +219,44 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           <pre style={{ margin: 0, fontSize: '11px' }}>
             {formatMatrix(currentMatrix)}
           </pre>
+          {/* 当前矩阵行列式 */}
+          <div style={{ marginTop: '6px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px', fontSize: '11px' }}>
+            <span style={{ color: '#888' }}>det(M) = {formatScalar(currentMatrix.determinant())}</span>
+            <span style={{ color: '#666', marginLeft: '8px' }}>
+              → 面积缩放 {formatScalar(Math.abs(currentMatrix.determinant()))} 倍
+            </span>
+            {currentMatrix.determinant() > EPS && (
+              <span style={{ color: '#4CAF50', marginLeft: '8px' }}>方向保持</span>
+            )}
+            {currentMatrix.determinant() < -EPS && (
+              <span style={{ color: '#ff4444', marginLeft: '8px' }}>方向翻转</span>
+            )}
+            {Math.abs(currentMatrix.determinant()) <= EPS && (
+              <span style={{ color: '#888', marginLeft: '8px' }}>平面被压缩，矩阵不可逆</span>
+            )}
+          </div>
+          {/* 当前矩阵逆矩阵 */}
+          <div style={{ marginTop: '6px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px', fontSize: '11px' }}>
+            {(() => {
+              const currentInverse = currentMatrix.inverse();
+              return currentInverse ? (
+                <div>
+                  <span style={{ color: '#4CAF50' }}>当前矩阵可逆</span>
+                  <span style={{ color: '#aaa', marginLeft: '8px' }}>M⁻¹ =</span>
+                  <pre style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#aaa' }}>
+                    {`[ ${formatElement(currentInverse.a)}  ${formatElement(currentInverse.b)} ]`}
+                    {'\n'}
+                    {`[ ${formatElement(currentInverse.c)}  ${formatElement(currentInverse.d)} ]`}
+                  </pre>
+                </div>
+              ) : (
+                <div>
+                  <span style={{ color: '#ff4444' }}>当前矩阵不可逆</span>
+                  <span style={{ color: '#888', marginLeft: '8px' }}>det ≈ 0，平面被压缩，无法唯一恢复</span>
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 
@@ -189,6 +274,114 @@ export const ResultPanel: React.FC<ResultPanelProps> = ({
           ))}
         </div>
       )}
+
+      {/* 新基坐标显示 */}
+      {basisConfig?.showBasisCoordinateInfo && vectorSet.length > 0 && (() => {
+        const b1 = new Vec2(basisConfig.b1[0], basisConfig.b1[1]);
+        const b2 = new Vec2(basisConfig.b2[0], basisConfig.b2[1]);
+        const P = buildBasisMatrix(b1, b2);
+        const valid = isValidBasis(P);
+
+        if (!valid) {
+          return (
+            <div style={{ marginBottom: '10px', padding: '8px', backgroundColor: '#3a1a1a', borderRadius: '4px', fontSize: '11px' }}>
+              <span style={{ color: '#ff4444' }}>当前 b1, b2 不能构成基，无法计算新基坐标。</span>
+            </div>
+          );
+        }
+
+        // 计算 A_B = P^{-1} A P
+        const A_final_B = computeTransformInBasis(finalMatrix, P);
+        const A_current_B = currentMatrix ? computeTransformInBasis(currentMatrix, P) : null;
+
+        return (
+          <div style={{ marginBottom: '10px' }}>
+            {/* 用户向量在新基下的坐标 */}
+            <p style={{ margin: '0 0 6px 0', color: '#00ffff', fontWeight: 'bold' }}>用户向量在新基 B 下的坐标：</p>
+            {vectorSet.map(v => {
+              const vec = new Vec2(v.vector[0], v.vector[1]);
+              const basisCoord = standardToBasisCoordinates(vec, P);
+              if (!basisCoord) return null;
+
+              return (
+                <div key={v.id} style={{ marginBottom: '6px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px' }}>
+                  <span style={{ color: '#888', fontSize: '11px' }}>{v.name} = {formatVec2(vec)}</span>
+                  <span style={{ color: '#666', marginLeft: '8px', fontSize: '11px' }}>在新基 B 下：</span>
+                  <pre style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#aaa' }}>
+                    {`[${v.name}]_B = [ ${formatElement(basisCoord.x)} ]`}
+                    {'\n'}
+                    {`         [ ${formatElement(basisCoord.y)} ]`}
+                  </pre>
+                </div>
+              );
+            })}
+
+            {/* 同一变换在新基下的矩阵 */}
+            <div style={{ marginTop: '10px', padding: '8px', backgroundColor: '#1a1a2e', borderRadius: '4px' }}>
+              <p style={{ margin: '0 0 6px 0', color: '#E91E63', fontWeight: 'bold' }}>同一变换在新基下的矩阵：</p>
+              <p style={{ margin: '0 0 4px 0', fontSize: '10px', color: '#888' }}>A_B = P⁻¹ A P</p>
+
+              {/* A_final_B */}
+              {A_final_B && (
+                <div style={{ marginBottom: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#4CAF50' }}>最终累计变换：</span>
+                  <pre style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#aaa' }}>
+                    {`A_final_B = [ ${formatElement(A_final_B.a)}  ${formatElement(A_final_B.b)} ]`}
+                    {'\n'}
+                    {`            [ ${formatElement(A_final_B.c)}  ${formatElement(A_final_B.d)} ]`}
+                  </pre>
+                </div>
+              )}
+
+              {/* A_current_B */}
+              {A_current_B && (
+                <div>
+                  <span style={{ fontSize: '11px', color: '#FF9800' }}>当前变换：</span>
+                  <pre style={{ margin: '4px 0 0 0', fontSize: '11px', color: '#aaa' }}>
+                    {`A_current_B = [ ${formatElement(A_current_B.a)}  ${formatElement(A_current_B.b)} ]`}
+                    {'\n'}
+                    {`              [ ${formatElement(A_current_B.c)}  ${formatElement(A_current_B.d)} ]`}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            {/* 用户向量验证（简洁版） */}
+            {A_final_B && vectorSet.length > 0 && (
+              <div style={{ marginTop: '8px', padding: '6px', backgroundColor: '#1a1a2e', borderRadius: '3px' }}>
+                <p style={{ margin: '0 0 4px 0', fontSize: '10px', color: '#888' }}>向量验证（A_B [v]_B = [A v]_B）：</p>
+                {vectorSet.map(v => {
+                  const vec = new Vec2(v.vector[0], v.vector[1]);
+                  const basisCoord = standardToBasisCoordinates(vec, P);
+                  if (!basisCoord) return null;
+
+                  // A_B [v]_B
+                  const AB_times_basisCoord = A_final_B.multiplyVec(basisCoord);
+
+                  // [A v]_B
+                  const Av = finalMatrix.multiplyVec(vec);
+                  const Av_basisCoord = standardToBasisCoordinates(Av, P);
+                  if (!Av_basisCoord) return null;
+
+                  // 验证是否一致
+                  const match =
+                    Math.abs(AB_times_basisCoord.x - Av_basisCoord.x) < EPS &&
+                    Math.abs(AB_times_basisCoord.y - Av_basisCoord.y) < EPS;
+
+                  return (
+                    <div key={v.id} style={{ marginBottom: '4px', fontSize: '10px' }}>
+                      <span style={{ color: '#aaa' }}>{v.name}: </span>
+                      <span style={{ color: match ? '#4CAF50' : '#ff4444' }}>
+                        {match ? '✓' : '✗'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* 非交换性验证（放在最下面） */}
       {commutativityInfo}

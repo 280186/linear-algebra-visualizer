@@ -7,6 +7,7 @@ import { Grid } from './Grid';
 import { VectorArrow } from './VectorArrow';
 import { UnitSquare } from './UnitSquare';
 import { UserVector, LabelLayout } from './UserVector';
+import { BasisGrid } from './BasisGrid';
 
 /**
  * Scene 渲染选项
@@ -14,6 +15,12 @@ import { UserVector, LabelLayout } from './UserVector';
 export interface SceneOptions {
   /** 变换网格强度 0.1 ~ 1.0 */
   transformedGridOpacity?: number;
+  /** 新基网格强度 0.1 ~ 1.0 */
+  basisGridOpacity?: number;
+  /** 基矩阵 P（如果提供且 showBasis=true，绘制新基网格） */
+  basisMatrix?: Mat2 | null;
+  /** 是否显示基与坐标信息 */
+  showBasis?: boolean;
 }
 
 /**
@@ -30,6 +37,8 @@ export class Scene {
   private grid: Grid;
   /** 单位正方形对象 */
   private unitSquare: UnitSquare;
+  /** 新基网格对象 */
+  private basisGrid: BasisGrid;
   /** 变换后的基向量 e1' */
   private e1Transformed: VectorArrow;
   /** 变换后的基向量 e2' */
@@ -45,6 +54,7 @@ export class Scene {
     // 创建场景对象
     this.grid = new Grid(1);
     this.unitSquare = new UnitSquare();
+    this.basisGrid = new BasisGrid();
     this.labelLayout = new LabelLayout();
 
     // 变换后的基向量（红色 e1'，绿色 e2'）
@@ -95,6 +105,14 @@ export class Scene {
     this.labelLayout.reset();
 
     const gridOpacity = options?.transformedGridOpacity ?? 0.6;
+    const basisGridOpacity = options?.basisGridOpacity ?? 0.4;
+    const showBasis = options?.showBasis ?? false;
+    const basisMatrix = options?.basisMatrix;
+
+    // === 新基网格层（如果开启） ===
+    if (showBasis && basisMatrix) {
+      this.basisGrid.render(ctx, camera, canvasWidth, canvasHeight, basisMatrix, basisGridOpacity);
+    }
 
     // === 静态参考层（颜色较淡） ===
 

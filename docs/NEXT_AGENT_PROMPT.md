@@ -29,7 +29,7 @@
 
 ## 三、当前项目状态
 
-- **当前阶段**：Stage 4.7.1（P^{-1}AP 路径数值演示）
+- **当前阶段**：Stage 4.8（特征值 / 特征向量可视化）
 - **当前分支**：phase-2-refactor
 - **最新标签**：stage-4.3-stable
 - **构建状态**：npm run build 和 npx tsc --noEmit 均通过
@@ -38,35 +38,11 @@
 
 ## 四、下一步任务
 
-**Stage 4.7.2：P、A、P^{-1} 三段 Canvas 动画演示**
+**Stage 4.9：控制面板折叠分区整理与 UI 清理**
 
 ### 目标
 
-在 Canvas 中直观演示：
-
-```
-[v]_B --P--> v_E --A--> A v_E --P^{-1}--> [Av]_B
-```
-
-### 建议实现方式
-
-1. 仍然使用同一个 Canvas
-2. 不做多画布
-3. 不引入 SVG、KaTeX、WebGL、PixiJS
-4. 不做特征值
-5. 先只对选中的一个用户向量做路径动画
-6. 控制面板负责步骤说明
-7. Canvas 负责轻量高亮和向量移动
-
-### 路径步骤
-
-```
-step 0: 显示 [v]_B
-step 1: P [v]_B = v_E
-step 2: A v_E
-step 3: P^{-1} A v_E = [Av]_B
-step 4: 对比 A_B [v]_B
-```
+整理控制面板 UI，添加折叠分区，改善用户体验。
 
 ---
 
@@ -84,6 +60,8 @@ step 4: 对比 A_B [v]_B
 8. 新基网格显示（可调强度）
 9. A_B = P^{-1}AP 数值显示
 10. Canvas 缩放/平移
+11. P^{-1}AP 路径演示（PathPanel + Canvas overlay）
+12. 特征值/特征向量可视化（EigenPanel + Canvas overlay）
 
 ---
 
@@ -126,6 +104,6 @@ npx tsc --noEmit
 
 ---
 
-*文档创建时间：2026-06-05*
-*当前阶段：Stage 4.7.1*
-*下一步：Stage 4.7.2 Canvas 三段动画演示*
+*文档更新时间：2026-06-06*
+*当前阶段：Stage 4.8*
+*下一步：Stage 4.9 控制面板折叠分区整理与 UI 清理*

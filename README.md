@@ -1,73 +1,304 @@
-# React + TypeScript + Vite
+# Linear Algebra Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+一个使用 TypeScript + React + Vite + Canvas 开发的二维线性代数交互式演示软件。
 
-Currently, two official plugins are available:
+目标是以接近 3Blue1Brown 的方式帮助用户直观理解：
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. 2×2 矩阵表示二维线性变换
+2. 矩阵乘积表示线性变换组合
+3. 行列式、面积缩放、方向翻转
+4. 逆矩阵和逆变换
+5. 基与坐标
+6. 坐标变换
+7. 同一线性变换在不同基下的矩阵表示
+8. 特征值和特征向量
 
-## React Compiler
+---
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## 已实现功能
 
-## Expanding the ESLint configuration
+### 矩阵与变换
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- 2×2 矩阵输入（支持整数、小数、分数如 `1/3`）
+- 矩阵序列：添加 / 删除 / 编辑 / 拖动排序
+- 播放完整矩阵序列动画
+- 单步前进 / 回退
+- 暂停 / 继续 / 重置
+- 非交换性验证（M2×M1 ≠ M1×M2）
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Canvas 可视化
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- 二维坐标轴
+- 变换网格（可调强度）
+- 单位正方形变换动画
+- 基向量 e1、e2 及变换后 e1'、e2'
+- 鼠标滚轮缩放
+- 鼠标拖拽平移
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 用户向量
+
+- 用户向量集合（添加 / 删除 / 编辑）
+- 标准坐标 / 新基坐标双输入
+- 向量标签显示与防重叠
+
+### 数学分析
+
+- 行列式 det(A) 显示
+- 面积缩放倍数与方向翻转提示
+- 逆矩阵显示
+- 播放逆变换（C → I）
+
+### 基与坐标
+
+- 新基向量 b1、b2 输入
+- 基矩阵 P = [b1 b2]
+- 新基网格显示（可调强度）
+- 坐标变换 [v]_B = P⁻¹v
+- 同一线性变换在新基下的矩阵 A_B = P⁻¹AP
+
+### P⁻¹AP 路径演示
+
+- 5 步路径演示控制面板
+- Canvas overlay 高亮绘制 v_E 和 Av_E
+- step 2 动画：v_E → Av_E（smoothStep 缓动，1.5s）
+- 路径播放与矩阵序列播放互斥
+
+### 特征值 / 特征向量
+
+- 特征值 / 特征方向计算（两个实特征值、重特征值、无实特征值）
+- 特征信息控制面板（总开关、特征值列表、方向选择、t 滑块）
+- Canvas 特征方向直线（过原点整条线，覆盖可视范围）
+- Canvas 示例向量 v 和 Av = λv
+
+---
+
+## 安装与运行
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式（默认 http://localhost:5173/）
+npm run dev
+
+# 构建生产版本
+npm run build
+
+# 预览生产构建
+npm run preview
+
+# TypeScript 类型检查
+npx tsc --noEmit
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+---
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 使用方法
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 输入矩阵
+
+在左侧面板的矩阵序列区域，直接在输入框中输入 2×2 矩阵的四个元素。支持：
+
+- 整数：`2`、`-1`
+- 小数：`0.5`、`-1.23`
+- 分数：`1/3`、`-2/5`
+
+### 矩阵序列
+
+- 点击"添加矩阵"按钮添加新矩阵
+- 点击矩阵右侧的删除按钮移除矩阵
+- 拖动矩阵卡片可以改变乘法顺序
+- 矩阵数量上限为 8 个
+
+### 播放控制
+
+- **播放完整序列**：从单位矩阵开始，依次播放每个矩阵变换
+- **上一步 / 下一步**：单步前进或回退
+- **播放逆变换**：从当前矩阵动画回到单位矩阵
+- **暂停 / 继续**：暂停或继续当前动画
+- **重置**：回到初始状态
+
+### 用户向量
+
+- 点击"添加向量"按钮添加用户向量
+- 输入标准坐标 (x, y)，新基坐标自动计算
+- 切换主控模式可以在新基坐标下输入，标准坐标自动更新
+- 勾选"显示标签"可在 Canvas 中显示向量数值
+
+### 基与坐标
+
+- 勾选"显示基与坐标信息"开启基变换功能
+- 输入新基向量 b1 和 b2 的坐标
+- 系统自动计算基矩阵 P、P⁻¹、det(P)
+- 新基网格会在 Canvas 中显示
+
+### P⁻¹AP 路径演示
+
+- 在"基与坐标"开启且 P 可逆时可用
+- 选择演示向量，点击"播放完整路径"
+- 或使用"上一步 / 下一步"逐步查看
+- Canvas 中高亮显示 v_E 和 Av_E
+- 控制面板显示每步的数值推导
+
+### 特征值 / 特征向量
+
+- 勾选"显示特征信息"开启
+- 系统自动分析最终累计矩阵的特征值和特征方向
+- 点击特征值列表选择查看某个方向
+- 拖动 t 滑块调整示例向量长度
+- Canvas 中显示特征方向直线和示例向量 v、Av
+
+### Canvas 操作
+
+- **缩放**：鼠标滚轮
+- **平移**：鼠标左键拖拽
+
+---
+
+## 数学约定
+
+### 列向量约定
+
+本项目使用列向量。
+
 ```
+向量 v = (x, y) 视为列向量 [x, y]ᵀ
+
+矩阵 A = [a b]
+         [c d]
+
+第一列 (a, c) 是 e1 的像
+第二列 (b, d) 是 e2 的像
+
+矩阵作用于向量：
+x' = a*x + b*y
+y' = c*x + d*y
+```
+
+### 矩阵乘法顺序
+
+```
+先执行 A，再执行 B，对应组合矩阵 B*A
+```
+
+### 基与坐标
+
+```
+新基 b1, b2 构成基矩阵 P = [b1 b2]
+
+标准坐标 → 新基坐标：[v]_B = P⁻¹v
+新基坐标 → 标准坐标：v = P[v]_B
+同一线性变换在新基下的矩阵：A_B = P⁻¹AP
+```
+
+### 特征值
+
+```
+Av = λv
+
+λ 是特征值，v 是对应的特征向量
+特征向量在变换后仍保持在同一条方向直线上
+```
+
+### 数值判断
+
+```
+const EPS = 1e-8
+Math.abs(det) < EPS → 不可逆
+```
+
+---
+
+## 项目结构
+
+```
+src/
+├── math/               # 数学模块
+│   ├── Vec2.ts         # 二维向量类
+│   └── Mat2.ts         # 二维矩阵类
+├── render/             # 渲染模块
+│   ├── Camera2D.ts     # 世界坐标 ↔ 屏幕坐标转换
+│   ├── drawGrid.ts     # 网格绘制
+│   ├── drawAxes.ts     # 坐标轴绘制
+│   ├── drawVector.ts   # 向量箭头绘制
+│   ├── drawPolygon.ts  # 多边形绘制
+│   └── drawTransformedAxes.ts
+├── scene/              # 场景对象
+│   ├── Scene.ts        # 场景管理器
+│   ├── Grid.ts         # 网格
+│   ├── VectorArrow.ts  # 向量箭头
+│   ├── UnitSquare.ts   # 单位正方形
+│   ├── UserVector.ts   # 用户向量
+│   └── BasisGrid.ts    # 新基网格
+├── animation/          # 动画系统
+│   ├── Animation.ts    # 动画接口
+│   ├── Timeline.ts     # 动画调度器
+│   ├── ApplyMatrixAnimation.ts
+│   └── easing.ts       # 缓动函数
+├── components/         # React 组件
+│   ├── App.tsx         # 主应用
+│   ├── CanvasView.tsx  # Canvas 绘图区
+│   ├── MatrixInput.tsx # 矩阵输入
+│   ├── MatrixList.tsx  # 矩阵序列列表
+│   ├── VectorList.tsx  # 向量列表
+│   ├── ResultPanel.tsx # 结果面板
+│   ├── BasisPanel.tsx  # 基与坐标面板
+│   ├── PathPanel.tsx   # P⁻¹AP 路径演示面板
+│   ├── EigenPanel.tsx  # 特征值/特征向量面板
+│   └── ResizableSidebar.tsx
+├── types/              # 类型定义
+│   └── index.ts
+└── utils/              # 工具函数
+    ├── id.ts           # ID 生成
+    ├── numberInput.ts  # 数字解析（整数/小数/分数）
+    ├── matrixSequence.ts
+    ├── basis.ts        # 基与坐标计算
+    └── eigen.ts        # 特征值/特征向量计算
+docs/                   # 项目文档
+├── HANDOFF.md          # 项目交接文档
+├── NEXT_AGENT_PROMPT.md
+├── PROJECT_SPEC.md     # 项目规格
+├── MATH_CONVENTIONS.md # 数学约定
+├── ROADMAP.md          # 开发路线图
+└── DEV_LOG.md          # 开发日志
+```
+
+---
+
+## 技术栈
+
+- **TypeScript** ~5.5.3
+- **React** ^18.3.1
+- **React DOM** ^18.3.1
+- **Vite** ^5.3.4
+- **浏览器 Canvas 2D API**（原生，不使用 WebGL / PixiJS）
+- 无其他运行时依赖
+
+---
+
+## 已知限制
+
+1. 当前只支持二维 2×2 矩阵
+2. 特征值可视化只处理实特征值和实特征方向，不演示复特征向量
+3. 不支持 3D 变换
+4. 不使用 WebGL，大量网格线时性能可能下降
+5. 当前是前端本地演示软件，没有后端
+6. 标签防重叠为简单实现，复杂场景可能仍有重叠
+
+---
+
+## 后续可扩展方向
+
+1. 更接近 3Blue1Brown 的视觉风格（深色主题、细网格、高亮动画）
+2. 控制面板折叠分区整理与 UI 优化
+3. 特征分解 / 对角化可视化
+4. 复特征值的解释说明
+5. 导出动画或截图
+6. 移动端适配
+7. 更丰富的教学脚本
+
+---
+
+## 许可证
+
+本项目为个人学习项目。

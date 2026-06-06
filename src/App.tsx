@@ -1,16 +1,19 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { CanvasView, CanvasViewHandle } from './components/CanvasView';
 import { ResizableSidebar } from './components/ResizableSidebar';
 import { MatrixList } from './components/MatrixList';
 import { VectorList } from './components/VectorList';
 import { ResultPanel } from './components/ResultPanel';
 import { BasisPanel } from './components/BasisPanel';
+import { PathPanel } from './components/PathPanel';
+import { EigenPanel } from './components/EigenPanel';
 import { Mat2 } from './math/Mat2';
 import { Vec2 } from './math/Vec2';
-import { MatrixItem, VectorItem, BasisConfig } from './types';
+import { MatrixItem, VectorItem, BasisConfig, PathDemoState, EigenConfig } from './types';
 import { generateId } from './utils/id';
 import { computeCumulativeMatrices } from './utils/matrixSequence';
 import { buildBasisMatrix, standardToBasisCoordinates } from './utils/basis';
+import { analyzeEigenvalues } from './utils/eigen';
 import './styles/global.css';
 
 /**
@@ -55,6 +58,24 @@ function App() {
   // 当前动画矩阵（用于结果面板显示）
   const [currentMatrix, setCurrentMatrix] = useState<Mat2 | null>(null);
 
+  // 路径演示状态（overlay，不影响全局变换）
+  const [pathDemo, setPathDemo] = useState<PathDemoState>({
+    selectedVectorId: null,
+    stepIndex: 0,
+    isPlaying: false,
+    overlayProgress: 0,
+  });
+
+  // 路径动画是否激活（包括自动播放和单步动画）
+  const [isPathAnimating, setIsPathAnimating] = useState(false);
+
+  // 特征信息配置
+  const [eigenConfig, setEigenConfig] = useState<EigenConfig>({
+    showEigenInfo: false,
+    selectedDirectionId: null,
+    scalarT: 1,
+  });
+
   // CanvasView ref
   const canvasViewRef = useRef<CanvasViewHandle>(null);
 
@@ -62,6 +83,26 @@ function App() {
   const cumulativeMatrices = useMemo(() => {
     return computeCumulativeMatrices(matrixSequence);
   }, [matrixSequence]);
+
+  // finalMatrix
+  const finalMatrix = cumulativeMatrices[cumulativeMatrices.length - 1] || Mat2.identity();
+
+  // 特征分析结果（从 finalMatrix 派生，不存 state）
+  const eigenResult = useMemo(() => {
+    return analyzeEigenvalues(finalMatrix);
+  }, [finalMatrix]);
+
+  // 当 finalMatrix 变化时，自动修正 selectedDirectionId
+  useEffect(() => {
+    if (!eigenConfig.showEigenInfo) return;
+    const exists = eigenResult.directions.some(d => d.id === eigenConfig.selectedDirectionId);
+    if (!exists) {
+      setEigenConfig(prev => ({
+        ...prev,
+        selectedDirectionId: eigenResult.directions[0]?.id || null,
+      }));
+    }
+  }, [eigenResult, eigenConfig.showEigenInfo, eigenConfig.selectedDirectionId]);
 
   // 添加矩阵
   const handleAddMatrix = useCallback(() => {
@@ -280,9 +321,137 @@ function App() {
     setIsPaused(prev => !prev);
   }, [isPaused]);
 
-  // 计算按钮禁用状态
-  const canStepForward = currentStepIndex < matrixSequence.length && !isPlaying;
-  const canStepBackward = currentStepIndex > 0 && !isPlaying;
+  // 路径演示：重置（当 basisConfig/matrixSequence/finalMatrix/vectorSet 变化时调用）
+  const resetPathDemo = useCallback(() => {
+    if (canvasViewRef.current) {
+      canvasViewRef.current.stopPathAnimation();
+    }
+    setPathDemo({
+      selectedVectorId: null,
+      stepIndex: 0,
+      isPlaying: false,
+      overlayProgress: 0,
+    });
+    setIsPathAnimating(false);
+  }, []);
+
+  // 当 basisConfig/matrixSequence/vectorSet 变化时，重置路径演示
+  const prevBasisRef = useRef(basisConfig);
+  const prevMatrixSeqRef = useRef(matrixSequence);
+  const prevVectorSetRef = useRef(vectorSet);
+
+  useEffect(() => {
+    const basisChanged =
+      prevBasisRef.current.b1[0] !== basisConfig.b1[0] ||
+      prevBasisRef.current.b1[1] !== basisConfig.b1[1] ||
+      prevBasisRef.current.b2[0] !== basisConfig.b2[0] ||
+      prevBasisRef.current.b2[1] !== basisConfig.b2[1] ||
+      prevBasisRef.current.showBasisCoordinateInfo !== basisConfig.showBasisCoordinateInfo;
+    const matrixChanged = prevMatrixSeqRef.current !== matrixSequence;
+    const vectorChanged = prevVectorSetRef.current !== vectorSet;
+
+    if (basisChanged || matrixChanged || vectorChanged) {
+      resetPathDemo();
+    }
+
+    prevBasisRef.current = basisConfig;
+    prevMatrixSeqRef.current = matrixSequence;
+    prevVectorSetRef.current = vectorSet;
+  }, [basisConfig, matrixSequence, vectorSet, resetPathDemo]);
+
+  // 路径演示：选择向量
+  const handlePathSelectVector = useCallback((id: string) => {
+    resetPathDemo();
+    setPathDemo(prev => ({ ...prev, selectedVectorId: id }));
+  }, [resetPathDemo]);
+
+  // 路径演示：上一步
+  const handlePathPrevStep = useCallback(() => {
+    if (!canvasViewRef.current) return;
+    setPathDemo(prev => {
+      if (prev.stepIndex <= 0) return prev;
+      const newStep = prev.stepIndex - 1;
+      canvasViewRef.current!.setPathStep(newStep);
+      return { ...prev, stepIndex: newStep, overlayProgress: 0 };
+    });
+  }, []);
+
+  // 路径演示：下一步
+  const handlePathNextStep = useCallback(() => {
+    if (!canvasViewRef.current) return;
+    setPathDemo(prev => {
+      if (prev.stepIndex >= 4) return prev;
+      const newStep = prev.stepIndex + 1;
+      if (newStep === 2) {
+        // step 2: 触发动画 v_E → Av_E
+        setIsPathAnimating(true);
+        canvasViewRef.current!.stepPathAnimation(() => {
+          setIsPathAnimating(false);
+          setPathDemo(p => ({ ...p, overlayProgress: 1 }));
+        });
+      } else {
+        canvasViewRef.current!.setPathStep(newStep);
+      }
+      return { ...prev, stepIndex: newStep, overlayProgress: newStep === 2 ? 0 : 0 };
+    });
+  }, []);
+
+  // 路径演示：播放完整路径
+  const handlePlayPath = useCallback(() => {
+    if (!canvasViewRef.current) return;
+    const selectedId = pathDemo.selectedVectorId || vectorSet[0]?.id;
+    if (!selectedId) return;
+
+    setPathDemo({
+      selectedVectorId: selectedId,
+      stepIndex: 0,
+      isPlaying: true,
+      overlayProgress: 0,
+    });
+    setIsPathAnimating(true);
+
+    // 自动播放序列：step 0 → 1 → 2(动画) → 3 → 4
+    const delays = [600, 600, 0, 600, 600]; // step 2 由动画控制时长
+    let currentStep = 0;
+
+    const advanceStep = () => {
+      currentStep++;
+      if (currentStep > 4) {
+        // 播放完成
+        setPathDemo(prev => ({ ...prev, isPlaying: false }));
+        setIsPathAnimating(false);
+        return;
+      }
+
+      if (currentStep === 2) {
+        // step 2: 触发动画
+        setPathDemo(prev => ({ ...prev, stepIndex: 2, overlayProgress: 0 }));
+        canvasViewRef.current!.stepPathAnimation(() => {
+          setPathDemo(prev => ({ ...prev, overlayProgress: 1 }));
+          // 动画完成后继续下一步
+          setTimeout(advanceStep, delays[3]);
+        });
+        return;
+      }
+
+      setPathDemo(prev => ({ ...prev, stepIndex: currentStep, overlayProgress: 0 }));
+      canvasViewRef.current!.setPathStep(currentStep);
+      setTimeout(advanceStep, delays[currentStep]);
+    };
+
+    canvasViewRef.current.setPathStep(0);
+    setTimeout(advanceStep, delays[0]);
+  }, [pathDemo.selectedVectorId, vectorSet]);
+
+  // 路径演示：重置
+  const handleResetPath = useCallback(() => {
+    resetPathDemo();
+  }, [resetPathDemo]);
+
+  // 计算按钮禁用状态（路径动画和矩阵动画互斥）
+  const matrixAnimActive = isPlaying && !isPaused;
+  const canStepForward = currentStepIndex < matrixSequence.length && !isPlaying && !isPathAnimating;
+  const canStepBackward = currentStepIndex > 0 && !isPlaying && !isPathAnimating;
 
   return (
     <div style={{
@@ -320,7 +489,7 @@ function App() {
             onChange={handleMatrixChange}
             onReorder={handleReorder}
             activeMatrixIndex={activeMatrixIndex}
-            disabled={isPlaying && !isPaused}
+            disabled={matrixAnimActive || isPathAnimating}
           />
 
           {/* 用户向量 */}
@@ -333,14 +502,35 @@ function App() {
             onStandardChange={handleStandardChange}
             onBasisChange={handleBasisChange}
             basisConfig={basisConfig}
-            disabled={isPlaying && !isPaused}
+            disabled={matrixAnimActive || isPathAnimating}
           />
 
           {/* 基与坐标 */}
           <BasisPanel
             config={basisConfig}
             onChange={setBasisConfig}
-            disabled={isPlaying && !isPaused}
+            disabled={matrixAnimActive || isPathAnimating}
+          />
+
+          {/* P^{-1}AP 路径演示 */}
+          <PathPanel
+            pathDemo={pathDemo}
+            vectorSet={vectorSet}
+            basisConfig={basisConfig}
+            finalMatrix={finalMatrix}
+            disabled={matrixAnimActive}
+            onSelectVector={handlePathSelectVector}
+            onPrevStep={handlePathPrevStep}
+            onNextStep={handlePathNextStep}
+            onPlayPath={handlePlayPath}
+            onResetPath={handleResetPath}
+          />
+
+          {/* 特征值 / 特征向量 */}
+          <EigenPanel
+            eigenConfig={eigenConfig}
+            eigenResult={eigenResult}
+            onConfigChange={setEigenConfig}
           />
 
           {/* 显示设置 */}
@@ -423,23 +613,23 @@ function App() {
 
             <button
               onClick={handlePlaySequence}
-              disabled={isPlaying && !isPaused}
+              disabled={matrixAnimActive || isPathAnimating}
               style={{
                 padding: '10px',
-                backgroundColor: (isPlaying && !isPaused) ? '#555' : '#2196F3',
+                backgroundColor: (matrixAnimActive || isPathAnimating) ? '#555' : '#2196F3',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
-                cursor: (isPlaying && !isPaused) ? 'not-allowed' : 'pointer',
+                cursor: (matrixAnimActive || isPathAnimating) ? 'not-allowed' : 'pointer',
                 fontSize: '14px'
               }}
             >
-              {isPlaying && !isPaused ? '播放中...' : '播放完整序列'}
+              {matrixAnimActive ? '播放中...' : '播放完整序列'}
             </button>
 
             {/* 播放逆变换按钮 */}
             {(() => {
-              const canPlayInverse = currentMatrix && Math.abs(currentMatrix.determinant()) >= 1e-8 && !isPlaying;
+              const canPlayInverse = currentMatrix && Math.abs(currentMatrix.determinant()) >= 1e-8 && !isPlaying && !isPathAnimating;
               return (
                 <button
                   onClick={handlePlayInverse}
@@ -513,6 +703,10 @@ function App() {
         transformedGridOpacity={transformedGridOpacity}
         basisGridOpacity={basisGridOpacity}
         basisConfig={basisConfig}
+        pathDemoState={pathDemo}
+        finalMatrix={finalMatrix}
+        eigenConfig={eigenConfig}
+        eigenResult={eigenResult}
       />
     </div>
   );
